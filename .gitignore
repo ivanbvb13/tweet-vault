@@ -1,0 +1,40 @@
+# Environment files (contain sensitive data)
+.env
+.env.local
+.env.production
+.env.example
+
+# Supabase config (contains your personal credentials)
+src/config/config.js
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Extension build (regenerate from source)
+*.crx
+*.xpi
+
+# Temporary files
+tmp/
+temp/
+
+
+opencode.json
