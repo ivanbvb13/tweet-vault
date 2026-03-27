@@ -29,7 +29,7 @@ Tweet Vault resuelve un problema específico: X/Twitter Premium no permite organ
 ### 1. Clonar el repositorio
 
 ```bash
-git clone <url-del-repo>
+git clone https://github.com/ivanbvb13/tweet-vault.git
 cd tweet-vault-extension
 ```
 
