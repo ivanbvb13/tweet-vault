@@ -10,25 +10,35 @@ class SupabaseClient {
     this.sessionLoadPromise = null
   }
 
+  isSessionExpired() {
+    if (!this.session?.expires_at) return false
+    return Date.now() >= this.session.expires_at
+  }
+
   async loadSession() {
-    // Si ya hay una carga en progreso, esperar a que termine
     if (this.sessionLoadPromise) {
       return this.sessionLoadPromise
     }
     
-    // Si ya se cargó la sesión, no hacer nada
     if (this.session !== null || this.session === false) {
       return
     }
 
-    // Iniciar la carga de sesión
     this.sessionLoadPromise = new Promise((resolve) => {
       chrome.storage.local.get('supabase_session', async (result) => {
         if (result.supabase_session) {
           this.session = result.supabase_session
-          console.log('Session loaded from storage:', { userId: this.session?.user?.id })
+          if (this.isSessionExpired()) {
+            console.log('Session expired, attempting refresh...')
+            const refreshed = await this.refreshAccessToken()
+            if (!refreshed) {
+              this.session = false
+            }
+          } else {
+            console.log('Session loaded from storage:', { userId: this.session?.user?.id })
+          }
         } else {
-          this.session = false // Marcar como "sin sesión" en vez de null
+          this.session = false
           console.log('No session found in storage')
         }
         this.sessionLoadPromise = null
@@ -51,6 +61,37 @@ class SupabaseClient {
     chrome.storage.local.remove('supabase_session', () => {
       console.log('Session cleared from storage')
     })
+  }
+
+  async refreshAccessToken() {
+    if (!this.session?.refresh_token) {
+      console.log('No refresh token available')
+      return false
+    }
+
+    try {
+      const response = await fetch(`${this.url}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: this.getHeaders(false),
+        body: JSON.stringify({ refresh_token: this.session.refresh_token })
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        console.log('Token refresh failed:', data.message)
+        this.clearSession()
+        return false
+      }
+
+      this.saveSession(data)
+      console.log('Token refreshed successfully')
+      return true
+    } catch (error) {
+      console.error('Error refreshing token:', error)
+      this.clearSession()
+      return false
+    }
   }
 
   async refreshSession() {
@@ -120,12 +161,10 @@ class SupabaseClient {
   async getUser() {
     await this.loadSession()
     
-    // Si no hay sesión o la sesión es false (sin sesión), retornar null
     if (!this.session || this.session === false) {
       return { data: { user: null }, error: null }
     }
     
-    // Verificar que la sesión tiene access_token
     if (!this.session?.access_token) {
       return { data: { user: null }, error: null }
     }
@@ -136,6 +175,13 @@ class SupabaseClient {
       })
       
       if (!response.ok) {
+        if (response.status === 401 && this.session?.refresh_token) {
+          console.log('Token expired, attempting refresh...')
+          const refreshed = await this.refreshAccessToken()
+          if (refreshed) {
+            return this.getUser()
+          }
+        }
         console.log('Session invalid, clearing...')
         this.clearSession()
         return { data: { user: null }, error: new Error('Invalid session') }
